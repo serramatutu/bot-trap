@@ -1,5 +1,8 @@
 pre-commit:
   jobs:
+    - name: fmt
+      run: ruff format .
+      stage_fixed: true
     - name: lint
       run: ruff check --fix
       stage_fixed: true

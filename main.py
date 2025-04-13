@@ -59,7 +59,6 @@ class Blocklist:
         logger.info(f"Flushed {n_to_flush} new IPs to blocklist file.")
 
 
-
 @dataclass
 class Options(DataClassJSONMixin):
     """Server options."""
@@ -74,7 +73,9 @@ class Options(DataClassJSONMixin):
     bullshit: Path = Path("bullshit.html")
 
     # Path to the blocklist file
-    blocklist_path: Path = field(metadata=field_options(alias="blocklist"), default=Path("blocklist.txt"))
+    blocklist_path: Path = field(
+        metadata=field_options(alias="blocklist"), default=Path("blocklist.txt")
+    )
     blocklist: Blocklist = field(init=False, metadata=field_options("omit"))
 
     # Port to listen on
@@ -119,9 +120,9 @@ class Options(DataClassJSONMixin):
         return cls.from_dict(raw_config)
 
 
-
 def get_ip_getter(opts: Options) -> Callable[[web.Request], str | None]:
     """Return a function that gets the client IP from a request."""
+
     def proxy(req: web.Request) -> str | None:
         return req.headers.get("x-forwarded-for")
 
@@ -129,6 +130,7 @@ def get_ip_getter(opts: Options) -> Callable[[web.Request], str | None]:
         return req.remote
 
     return proxy if opts.proxy else no_proxy
+
 
 def get_blocklist_middleware(opts: Options) -> Middleware:
     """Get a middleware that blocks people that are in the blocklist."""
@@ -150,6 +152,7 @@ def get_blocklist_middleware(opts: Options) -> Middleware:
 
     return middleware
 
+
 def get_not_found_middleware(opts: Options) -> Middleware:
     """Get a middleware that returns the 404 file for all not found requests."""
     with open(opts.not_found, "r") as f:
@@ -159,7 +162,6 @@ def get_not_found_middleware(opts: Options) -> Middleware:
     async def middleware(request: web.Request, handler: Handler) -> web.StreamResponse:
         try:
             resp = await handler(request)
-            print(resp)
             if resp.status != 404:
                 return resp
         except web.HTTPException as ex:
@@ -172,7 +174,6 @@ def get_not_found_middleware(opts: Options) -> Middleware:
 
 
 def get_trap_handler(opts: Options) -> Handler:
-
     ip_getter = get_ip_getter(opts)
 
     async def handler(req: web.Request) -> web.Response:
@@ -191,6 +192,7 @@ def get_trap_handler(opts: Options) -> Handler:
         return web.Response(body="ok")
 
     return handler
+
 
 def get_robots_txt_handler(opts: Options) -> Handler:
     robots_txt_path = os.path.join(opts.public, "robots.txt")
@@ -213,7 +215,7 @@ def get_robots_txt_handler(opts: Options) -> Handler:
 
 def get_static_handler(opts: Options) -> Handler:
     """Get a list of all files. This will load all files in memory."""
-    
+
     files: list[Path] = []
     to_scan: deque[Path] = deque([opts.public])
 
@@ -230,7 +232,7 @@ def get_static_handler(opts: Options) -> Handler:
     routes: dict[str, Path] = {}
     for file in files:
         file_str = str(file)
-        rel_path = file_str[len(str(opts.public)):]
+        rel_path = file_str[len(str(opts.public)) :]
 
         routes[rel_path] = file
 
@@ -261,11 +263,10 @@ def get_static_handler(opts: Options) -> Handler:
         return web.FileResponse(path=file, status=200)
 
     return handler
-    
+
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO)
-
 
     parser = argparse.ArgumentParser()
     _ = parser.add_argument(
@@ -273,21 +274,24 @@ def main() -> None:
         help="bot-trap.json config file.",
     )
     namespace = parser.parse_args()
-    opts= Options.from_file(Path(namespace.config_file))
+    opts = Options.from_file(Path(namespace.config_file))
 
-    app = web.Application(middlewares=[
-        get_blocklist_middleware(opts),
-        get_not_found_middleware(opts),
-    ])
-    _ = app.add_routes([
-        web.get(opts.trap, get_trap_handler(opts)),
-        web.get("/robots.txt", get_robots_txt_handler(opts)),
-        web.get(r"/{resource:.*}", get_static_handler(opts)),
-    ])
+    app = web.Application(
+        middlewares=[
+            get_blocklist_middleware(opts),
+            get_not_found_middleware(opts),
+        ]
+    )
+    _ = app.add_routes(
+        [
+            web.get(opts.trap, get_trap_handler(opts)),
+            web.get("/robots.txt", get_robots_txt_handler(opts)),
+            web.get(r"/{resource:.*}", get_static_handler(opts)),
+        ]
+    )
 
     web.run_app(app, host=opts.host, port=opts.port)
 
 
 if __name__ == "__main__":
     main()
-
