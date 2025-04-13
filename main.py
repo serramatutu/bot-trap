@@ -69,6 +69,12 @@ class Options(DataClassJSONMixin):
     # Path to file to be returned when request is 404
     not_found: Path
 
+    # Port to listen on
+    host: str = "0.0.0.0"
+
+    # Port to listen on
+    port: int = 8080
+
     # Path to the bullshit file
     bullshit: Path = Path("bullshit.txt")
 
@@ -206,7 +212,7 @@ def main() -> None:
         web.get("/robots.txt", get_robots_txt_handler(opts)),
     ])
 
-    web.run_app(app)
+    web.run_app(app, host=opts.host, port=opts.port)
 
 
 if __name__ == "__main__":
