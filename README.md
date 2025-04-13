@@ -42,5 +42,5 @@ entry         | kind      | default                                          | d
 `trap`        | HTTP path | `/bot-trap`                                      | the trap path that will add an IP to the blocklist
 `host`        | address   | `0.0.0.0`                                        | the host to listen on
 `port`        | integer   | 8080                                             | the port to listen on
-`proxy`       | boolean   | false                                            | whether `bot-trap` is behind a reverse proxy
+`proxy`       | boolean   | false                                            | whether `bot-trap` is behind a reverse proxy. If this is `true`, it'll get the client IP from the `X-Forwarded-For` header
 
