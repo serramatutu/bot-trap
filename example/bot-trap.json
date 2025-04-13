@@ -1,0 +1,4 @@
+{
+  "public": "public/",
+  "not_found": "public/404.html"
+}

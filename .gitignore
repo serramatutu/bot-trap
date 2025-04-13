@@ -10,5 +10,3 @@ wheels/
 .venv
 
 # Testing
-blocklist.txt
-public/

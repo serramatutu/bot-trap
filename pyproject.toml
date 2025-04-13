@@ -1,11 +1,12 @@
 [project]
 name = "bot-trap"
 version = "0.1.0"
-description = "Static file server that detects bad crawlers."
+description = "Static file server that detects and blocks bad crawlers."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "aiohttp>=3.11.16",
+    "mashumaro>=3.15",
 ]
 
 [dependency-groups]
