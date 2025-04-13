@@ -1,0 +1,7 @@
+pre-commit:
+  jobs:
+    - name: lint
+      run: ruff check --fix
+      stage_fixed: true
+    - name: mypy
+      run: mypy .
