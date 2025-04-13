@@ -25,7 +25,7 @@ You can try it out yourself.
 2. Make some requests to it and verify that it responds with the files under `example/public/`.
 3. Request `/robots.txt` and verify that it contains `Disallow: /bot-trap` for all user agents.
 4. Request `/bot-trap`. You'll see a log saying that your IP has been blocked. You can check `example/blocklist.txt` to verify your IP is there.
-5. Make the same requests as in step 2. The content should be replaced by whatever is in `example/bullshit.txt`.
+5. Make the same requests as in step 2. The content should be replaced by whatever is in `example/bullshit.html`.
 
 
 ## Config
