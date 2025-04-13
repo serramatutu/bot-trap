@@ -120,6 +120,9 @@ class Options(DataClassJSONMixin):
         return cls.from_dict(raw_config)
 
 
+NO_CACHE = {"Cache-Control": "no-cache"}
+
+
 def get_ip_getter(opts: Options) -> Callable[[web.Request], str | None]:
     """Return a function that gets the client IP from a request."""
 
@@ -134,9 +137,6 @@ def get_ip_getter(opts: Options) -> Callable[[web.Request], str | None]:
 
 def get_blocklist_middleware(opts: Options) -> Middleware:
     """Get a middleware that blocks people that are in the blocklist."""
-    with open(opts.bullshit, "r") as f:
-        bullshit = f.read()
-
     ip_getter = get_ip_getter(opts)
 
     @web.middleware
@@ -146,7 +146,7 @@ def get_blocklist_middleware(opts: Options) -> Middleware:
 
         logger.info(f"{ip}: blocked={blocked}")
         if blocked:
-            return web.Response(body=bullshit)
+            return web.FileResponse(path=opts.bullshit, headers=NO_CACHE)
 
         return await handler(request)
 
@@ -155,8 +155,6 @@ def get_blocklist_middleware(opts: Options) -> Middleware:
 
 def get_not_found_middleware(opts: Options) -> Middleware:
     """Get a middleware that returns the 404 file for all not found requests."""
-    with open(opts.not_found, "r") as f:
-        not_found = f.read()
 
     @web.middleware
     async def middleware(request: web.Request, handler: Handler) -> web.StreamResponse:
@@ -168,7 +166,7 @@ def get_not_found_middleware(opts: Options) -> Middleware:
             if ex.status != 404:
                 raise
 
-        return web.Response(body=not_found, status=404)
+        return web.FileResponse(path=opts.not_found, status=404)
 
     return middleware
 
@@ -189,7 +187,7 @@ def get_trap_handler(opts: Options) -> Handler:
         opts.blocklist.add(ip)
         opts.blocklist.flush()
 
-        return web.Response(body="ok")
+        return web.Response(body="ok", headers=NO_CACHE)
 
     return handler
 
@@ -260,7 +258,7 @@ def get_static_handler(opts: Options) -> Handler:
         if file is None:
             raise web.HTTPNotFound()
 
-        return web.FileResponse(path=file, status=200)
+        return web.FileResponse(path=file, status=200, headers=NO_CACHE)
 
     return handler
 
