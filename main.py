@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import deque
 import json
 from dataclasses import dataclass, field
 import logging
@@ -67,20 +68,20 @@ class Options(DataClassJSONMixin):
     public: Path
 
     # Path to file to be returned when request is 404
-    not_found: Path
+    not_found: Path = Path("404.html")
+
+    # Path to the bullshit file
+    bullshit: Path = Path("bullshit.html")
+
+    # Path to the blocklist file
+    blocklist_path: Path = field(metadata=field_options(alias="blocklist"), default=Path("blocklist.txt"))
+    blocklist: Blocklist = field(init=False, metadata=field_options("omit"))
 
     # Port to listen on
     host: str = "0.0.0.0"
 
     # Port to listen on
     port: int = 8080
-
-    # Path to the bullshit file
-    bullshit: Path = Path("bullshit.txt")
-
-    # Path to the blocklist file
-    blocklist_path: Path = field(metadata=field_options(alias="blocklist"), default=Path("blocklist.txt"))
-    blocklist: Blocklist = field(init=False, metadata=field_options("omit"))
 
     # Whethere bot-trap is sitting behind a reverse proxy
     proxy: bool = False
@@ -99,7 +100,7 @@ class Options(DataClassJSONMixin):
         anchor = self.anchor or os.getcwd()
 
         self.public = Path(os.path.join(anchor, self.public))
-        self.not_found = Path(os.path.join(anchor, self.not_found))
+        self.not_found = Path(os.path.join(self.public, self.not_found))
         self.bullshit = Path(os.path.join(anchor, self.bullshit))
         self.blocklist_path = Path(os.path.join(anchor, self.blocklist_path))
 
@@ -129,8 +130,10 @@ def get_ip_getter(opts: Options) -> Callable[[web.Request], str | None]:
 
     return proxy if opts.proxy else no_proxy
 
-def get_blocklist_middleware(opts: Options, bullshit: str) -> Middleware:
+def get_blocklist_middleware(opts: Options) -> Middleware:
     """Get a middleware that blocks people that are in the blocklist."""
+    with open(opts.bullshit, "r") as f:
+        bullshit = f.read()
 
     ip_getter = get_ip_getter(opts)
 
@@ -144,6 +147,26 @@ def get_blocklist_middleware(opts: Options, bullshit: str) -> Middleware:
             return web.Response(body=bullshit)
 
         return await handler(request)
+
+    return middleware
+
+def get_not_found_middleware(opts: Options) -> Middleware:
+    """Get a middleware that returns the 404 file for all not found requests."""
+    with open(opts.not_found, "r") as f:
+        not_found = f.read()
+
+    @web.middleware
+    async def middleware(request: web.Request, handler: Handler) -> web.StreamResponse:
+        try:
+            resp = await handler(request)
+            print(resp)
+            if resp.status != 404:
+                return resp
+        except web.HTTPException as ex:
+            if ex.status != 404:
+                raise
+
+        return web.Response(body=not_found, status=404)
 
     return middleware
 
@@ -188,6 +211,58 @@ def get_robots_txt_handler(opts: Options) -> Handler:
     return handler
 
 
+def get_static_handler(opts: Options) -> Handler:
+    """Get a list of all files. This will load all files in memory."""
+    
+    files: list[Path] = []
+    to_scan: deque[Path] = deque([opts.public])
+
+    while len(to_scan) > 0:
+        curr = to_scan.pop()
+
+        for entry in os.scandir(curr):
+            full_path = Path(os.path.join(curr, entry.path))
+            if entry.is_file():
+                files.append(full_path)
+            elif entry.is_dir():
+                to_scan.append(full_path)
+
+    routes: dict[str, Path] = {}
+    for file in files:
+        file_str = str(file)
+        rel_path = file_str[len(str(opts.public)):]
+
+        routes[rel_path] = file
+
+        file_name = os.path.basename(file)
+
+        if file_name == "index.html":
+            # resolve /dir/ to /dir/index.html
+            dir_name_slash = rel_path.rstrip("index.html")
+            routes[dir_name_slash] = file
+
+            # resolve /dir to /dir/index.html
+            dir_name_no_slash = rel_path.rstrip("/index.html")
+            if dir_name_no_slash != "":
+                routes[dir_name_no_slash] = file
+
+    async def handler(req: web.Request) -> web.StreamResponse:
+        """Return the file if it exists robots.txt."""
+        resource = req.match_info.get("resource")
+        if resource is None:
+            raise web.HTTPNotFound()
+
+        resource = "/" + resource
+
+        file = routes.get(resource)
+        if file is None:
+            raise web.HTTPNotFound()
+
+        return web.FileResponse(path=file, status=200)
+
+    return handler
+    
+
 def main() -> None:
     logging.basicConfig(level=logging.INFO)
 
@@ -200,16 +275,14 @@ def main() -> None:
     namespace = parser.parse_args()
     opts= Options.from_file(Path(namespace.config_file))
 
-    with open(opts.bullshit, "r") as f:
-        bullshit = f.read()
-
     app = web.Application(middlewares=[
-        get_blocklist_middleware(opts, bullshit)
+        get_blocklist_middleware(opts),
+        get_not_found_middleware(opts),
     ])
     _ = app.add_routes([
-        web.static("/", opts.public, show_index=True),
         web.get(opts.trap, get_trap_handler(opts)),
         web.get("/robots.txt", get_robots_txt_handler(opts)),
+        web.get(r"/{resource:.*}", get_static_handler(opts)),
     ])
 
     web.run_app(app, host=opts.host, port=opts.port)
